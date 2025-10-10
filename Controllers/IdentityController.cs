@@ -1,18 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DockerExam_IdentityApp.Dtos;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 
 namespace DockerExam_IdentityApp.Controllers
 {
+    [ApiController]
     [Route("api/[controller]")]
     public class IdentityController : ControllerBase
     {
@@ -22,37 +17,48 @@ namespace DockerExam_IdentityApp.Controllers
         {
             this.userManager = userManager;
         }
-        [HttpPost]
-        [Route("/api/[controller]/[action]", Name = "SignUp")]
+
+        [HttpPost("registration")]
         public async Task<IActionResult> Registration([FromForm] RegistrationDto dto)
         {
-            var result = await userManager.CreateAsync(new IdentityUser()
+            var user = new IdentityUser()
             {
                 Email = dto.Email,
                 UserName = dto.Name,
-            }, dto.Password);
-            if(result.Succeeded){
-                PushMessage(JsonSerializer.Serialize(result),"usersQueue");
-                return base.Ok();
+            };
+            var result = await userManager.CreateAsync(user, dto.Password);
+            
+
+            if (result.Succeeded)
+            {
+                var userForQueue = new
+                {
+                    user.Id,
+                    user.UserName,
+                    user.Email
+                };
+                PushMessage(JsonSerializer.Serialize(userForQueue), "usersQueue");
+                return Ok();
             }
-            else{
-                return base.BadRequest(string.Join("\n", result.Errors.Select(error => error.Description)));
+            else
+            {
+                return BadRequest(string.Join("\n", result.Errors.Select(error => error.Description)));
             }
         }
 
-        void PushMessage(string message, string queueName)
+        private void PushMessage(string message, string queueName)
         {
             var factory = new ConnectionFactory()
             {
-                HostName = "rabbitmq_app",
-                UserName = "rmuser",
-                Password = "rmpassword"
+                HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST")!,
+                UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER")!,
+                Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS")!
             };
 
             using var connection = factory.CreateConnection();
             using var channel = connection.CreateModel();
 
-            var result = channel.QueueDeclare(
+            channel.QueueDeclare(
                 queue: queueName,
                 durable: true,
                 exclusive: false,
@@ -68,7 +74,7 @@ namespace DockerExam_IdentityApp.Controllers
                 body: messageInBytes
             );
 
-            System.Console.WriteLine($"Push: '{message}'");
+            Console.WriteLine($"Push: '{message}'");
         }
     }
 }

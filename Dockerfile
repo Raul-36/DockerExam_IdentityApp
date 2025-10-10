@@ -7,4 +7,4 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 as app
 WORKDIR /app
 COPY --from=build /build/dist .
 
-ENTRYPOINT [ "dotnet", "WebApiApp.dll" ]
+ENTRYPOINT [ "dotnet", "DockerExam_IdentityApp.dll" ]
